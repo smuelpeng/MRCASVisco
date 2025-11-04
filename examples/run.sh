@@ -1,0 +1,1 @@
+python examples/demo_vh.py --data-dir data/data/VH --json-file VH_flag_4o.json --index 1
