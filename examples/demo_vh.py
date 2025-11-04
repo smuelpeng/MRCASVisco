@@ -203,9 +203,13 @@ def main():
         
         # Display results
         logger.info(f"\n[Attack Result]")
-        logger.info(f"Response length: {len(result['final_response'])} chars")
-        logger.info(f"Context rounds: {result['num_rounds']}")
-        logger.info(f"Model response: {result['final_response'][:200]}...")
+        logger.info(f"Strategy: {result['strategy']}")
+        logger.info(f"Total rounds: {len(result['rounds'])}")
+        
+        # Show final response
+        final_response = result.get('finalResponse', '')
+        logger.info(f"Final response length: {len(final_response)} chars")
+        logger.info(f"Final response preview: {final_response[:200]}...")
         
         # Save results
         output_dir.mkdir(exist_ok=True)

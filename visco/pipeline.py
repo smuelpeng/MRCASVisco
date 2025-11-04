@@ -72,47 +72,15 @@ class VisCoAttackPipeline:
         return_full_context: bool = True,
         **kwargs
     ) -> Dict[str, Any]:
-        """
-        Execute complete VisCo attack.
+        """Execute complete VisCo attack"""
+        logger.info(f"Starting attack: {strategy}")
         
-        Args:
-            image: Input image (path or PIL Image)
-            harmful_query: Original harmful query
-            strategy: Attack strategy ("VS", "VM", "VI", or "VH")
-            num_rounds: Number of conversation rounds
-            temperature: Generation temperature
-            max_tokens: Maximum tokens for generation
-            return_full_context: Whether to return full conversation context
-            **kwargs: Additional strategy-specific arguments
-        
-        Returns:
-            Dictionary containing:
-            - image_desc: Generated image description
-            - context: Multi-turn conversation context
-            - attack_prompt: Final attack prompt (refined)
-            - final_response: Model's response to attack
-            - strategy: Strategy used
-        """
-        logger.info("="*60)
-        logger.info(f"Starting VisCo Attack with strategy: {strategy}")
-        logger.info(f"Harmful query: {harmful_query}")
-        logger.info("="*60)
-        
-        # Load image
         image = load_image(image)
         
-        # Stage 1: Vision-Centric Adversarial Context Generation
-        logger.info("\n[Stage 1] Adversarial Context Generation")
-        logger.info("-" * 60)
+        # Generate image description
+        image_desc = self.image_describer.describe(image=image, harmful_query=harmful_query)
         
-        # Step 1: Image description
-        image_desc = self.image_describer.describe(
-            image=image,
-            harmful_query=harmful_query
-        )
-        logger.info(f"Image description generated ({len(image_desc)} chars)")
-        
-        # Step 2: Context construction
+        # Build context
         context, initial_attack_prompt = self.context_builder.build(
             image_desc=image_desc,
             harmful_query=harmful_query,
@@ -121,98 +89,91 @@ class VisCoAttackPipeline:
             num_rounds=num_rounds,
             **kwargs
         )
-        logger.info(f"Context built with {len(context)} turns")
-        logger.info(f"Initial attack prompt: {initial_attack_prompt[:100]}...")
         
-        # Stage 2: Attack Prompt Refinement
+        # Refine attack prompt
         attack_prompt = initial_attack_prompt
         if self.enable_refinement:
-            logger.info("\n[Stage 2] Attack Prompt Refinement")
-            logger.info("-" * 60)
-            
             attack_prompt = self.prompt_refiner.refine(
                 attack_prompt=initial_attack_prompt,
                 context=context,
                 harmful_query=harmful_query,
                 **kwargs
             )
-            logger.info(f"Refined attack prompt: {attack_prompt[:100]}...")
         
-        # Stage 3: Attack Execution
-        logger.info("\n[Stage 3] Attack Execution")
-        logger.info("-" * 60)
-        
-        # Add final attack prompt to context
+        # Execute attack
         final_context = context + [{
             "role": "user",
             "content": attack_prompt,
             "image": image if strategy in ["VS", "VM", "VI"] else None
         }]
         
-        # Generate response from target model
-        logger.info("Sending attack sequence to target model...")
         final_response = self.target_model.chat(
             context=final_context,
             temperature=temperature,
             max_tokens=max_tokens
         )
         
-        logger.info(f"Response received ({len(final_response)} chars)")
-        logger.info("="*60)
-        logger.info("Attack Complete!")
-        logger.info("="*60)
+        logger.info(f"Attack complete ({len(final_response)} chars)")
         
-        # Prepare result
+        # Prepare result in structured format
+        rounds = []
+        
+        # Process context into rounds
+        for i in range(0, len(context), 2):
+            user_turn = context[i]
+            assistant_turn = context[i + 1] if i + 1 < len(context) else None
+            
+            # Build prompt parts
+            prompt_parts = [{"type": "text", "text": user_turn.get('content', '')}]
+            
+            # Add image if present
+            if user_turn.get('image') is not None:
+                # Determine if this is the core image (first round) or auxiliary image
+                is_core_image = (i == 0)
+                prompt_parts.append({
+                    "type": "image",
+                    "image": user_turn['image'],
+                    "CoreImage": str(is_core_image)
+                })
+            
+            round_data = {
+                "roundIndex": i // 2 + 1,
+                "roundType": "spoof",
+                "promptParts": prompt_parts,
+                "response": assistant_turn.get('content', '') if assistant_turn else None
+            }
+            rounds.append(round_data)
+        
+        # Add final attack round (without response)
+        final_prompt_parts = [{"type": "text", "text": attack_prompt}]
+        
+        rounds.append({
+            "roundIndex": len(rounds) + 1,
+            "roundType": "attack",
+            "promptParts": final_prompt_parts
+        })
+        
         result = {
-            "image_desc": image_desc,
-            "attack_prompt": attack_prompt,
-            "final_response": final_response,
+            "originalMaliciousQuestion": harmful_query,
+            "imageDescription": image_desc,
             "strategy": strategy,
-            "num_rounds": len(context) // 2,  # Count actual conversation rounds
+            "rounds": rounds,
+            "finalResponse": final_response
         }
         
         if return_full_context:
-            result["context"] = context
-            result["full_context"] = final_context
+            result["_raw_context"] = context
+            result["_raw_full_context"] = final_context
         
         return result
     
-    def attack_batch(
-        self,
-        image_query_pairs: list,
-        strategy: str = "VI",
-        **kwargs
-    ) -> list:
-        """
-        Execute attacks on multiple image-query pairs.
-        
-        Args:
-            image_query_pairs: List of (image, harmful_query) tuples
-            strategy: Attack strategy
-            **kwargs: Additional attack arguments
-        
-        Returns:
-            List of attack results
-        """
+    def attack_batch(self, image_query_pairs: list, strategy: str = "VI", **kwargs) -> list:
+        """Execute attacks on multiple image-query pairs"""
         results = []
-        
         for i, (image, query) in enumerate(image_query_pairs):
-            logger.info(f"\n{'='*60}")
-            logger.info(f"Batch Attack {i+1}/{len(image_query_pairs)}")
-            logger.info(f"{'='*60}")
-            
-            try:
-                result = self.attack(
-                    image=image,
-                    harmful_query=query,
-                    strategy=strategy,
-                    **kwargs
-                )
-                results.append(result)
-            except Exception as e:
-                logger.error(f"Attack failed for pair {i+1}: {str(e)}")
-                results.append({"error": str(e), "success": False})
-        
+            logger.info(f"Batch attack {i+1}/{len(image_query_pairs)}")
+            result = self.attack(image=image, harmful_query=query, strategy=strategy, **kwargs)
+            results.append(result)
         return results
 
 

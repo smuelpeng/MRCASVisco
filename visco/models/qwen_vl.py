@@ -167,12 +167,21 @@ class QwenVLModel(BaseVLModel):
         inputs = inputs.to(self.model.device)
         
         # Generate
-        generated_ids = self.model.generate(
+        generate_kwargs = {
             **inputs,
-            max_new_tokens=max_tokens,
-            temperature=temperature,
+            "max_new_tokens": max_tokens,
             **kwargs
-        )
+        }
+        
+        # Handle temperature=0.0 for greedy decoding
+        if temperature == 0.0:
+            generate_kwargs["do_sample"] = False
+            generate_kwargs["top_k"] = None  # Avoid warning with greedy decoding
+        else:
+            generate_kwargs["do_sample"] = True
+            generate_kwargs["temperature"] = temperature
+        
+        generated_ids = self.model.generate(**generate_kwargs)
         
         # Decode response
         generated_ids_trimmed = [
