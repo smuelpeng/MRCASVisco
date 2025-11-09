@@ -10,6 +10,7 @@ Usage:
 import sys
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Dict, Any, List
 
@@ -81,9 +82,10 @@ def process_single_item(data_item: Dict[str, Any], data_dir: str, config: Dict[s
     
     result['data_item'] = data_item
     
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_file = output_dir / f"vh_result_index_{index}.json"
-    save_result(result, str(output_file))
+    os.makedirs(str(output_dir), exist_ok=True)
+    output_path = output_dir + '/' + f"vh_result_index_{index}.json"
+    print(output_path)
+    save_result(result, str(output_path))
     logger.info(f"✓ Item {index} saved")
     
     return result
@@ -97,11 +99,22 @@ def initialize_models(config: Dict[str, Any]):
     sdxl_config = config['models']['sdxl']
     refinement_config = config['refinement']
     vh_config = config['strategies']['VH']
+    aux_vlm_config = config['models']['aux_vlm']
     
-    target_model = QwenVLModel(
-        model_path=target_config['model_path'],
-        device=target_config['device']
-    )
+    # Support selecting an API-backed qwen model via config type
+    if target_config.get('model_name') == 'qwen-vl-max':
+        # Lazy import of API adapter to avoid requests dependency unless used
+        from visco.models.qwen_vl_api import QwenVLAPIModel
+
+        target_model = QwenVLAPIModel(
+            api_key=target_config.get('api_key'),
+            model_name=target_config.get('model_name', 'qwen-vl-max'),
+        )
+    else:
+        target_model = QwenVLModel(
+            model_path=target_config['model_path'],
+            device=target_config['device']
+        )
     
     aux_image_gen = None
     if vh_config.get('use_auxiliary_image', True):
@@ -110,9 +123,13 @@ def initialize_models(config: Dict[str, Any]):
             device=sdxl_config['device'],
             num_inference_steps=sdxl_config['num_inference_steps']
         )
-    
+    aux_vlm_model = QwenVLModel(
+            model_path=aux_vlm_config['model_path'],
+            device=aux_vlm_config['device']
+        )
     pipeline = VisCoAttackPipeline(
         target_model=target_model,
+        aux_model=aux_vlm_model,
         aux_image_gen=aux_image_gen,
         enable_refinement=refinement_config.get('enable_toxicity_obfuscation', True),
         max_refinement_iterations=refinement_config.get('max_iterations', 3)
@@ -147,14 +164,17 @@ def main():
     # Load config
     config = load_config(args.config)
     logging_config = config['logging']
-    output_dir = Path(logging_config['output_dir'])
+    data_dir = Path(args.data_dir)
+    data = data_dir.name
+
+    output_dir = logging_config['output_dir']+ '/'+data
     
     use_data_format = args.data_dir and args.json_file
     
     if use_data_format:
         data_items = load_data_items(args.data_dir, args.json_file, args.index, args.all)
         first_item = data_items[0]
-        harmful_query = first_item.get('问题', '')
+        harmful_query = first_item.get('原始问题', '')
         image_path = first_item.get('路径', '')
     else:
         data_items = None
@@ -170,11 +190,11 @@ def main():
     if use_data_format and args.all:
         # Process all items
         logger.info(f"Processing {len(data_items)} items...")
-        output_dir.mkdir(exist_ok=True)
+        os.makedirs(str(output_dir), exist_ok=True)
         
         results = []
         for i, data_item in enumerate(data_items, 1):
-            logger.info(f"[{i}/{len(data_items)}] ", end="")
+            logger.info(f"[{i}/{len(data_items)}] ")
             result = process_single_item(data_item, args.data_dir, config, pipeline, output_dir)
             results.append(result)
         
@@ -212,13 +232,13 @@ def main():
         logger.info(f"Final response preview: {final_response[:200]}...")
         
         # Save results
-        output_dir.mkdir(exist_ok=True)
+        os.makedirs(str(output_dir), exist_ok=True)
         
         if use_data_format:
             index = first_item.get('索引', 'unknown')
-            output_path = output_dir / f"vh_result_index_{index}.json"
+            output_path = output_dir + '/' + f"vh_result_index_{index}.json"
         else:
-            output_path = output_dir / "vh_demo_result.json"
+            output_path = output_dir + '/' + f"vh_demo_result.json"
         
         save_result(result, str(output_path))
         logger.info(f"✓ Results saved to: {output_path}")

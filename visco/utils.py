@@ -34,9 +34,8 @@ def load_config(config_path: str = "configs/config.yaml") -> Dict[str, Any]:
 
 def save_result(result: Dict[str, Any], output_path: str):
     """Save attack result to JSON file (saves Image objects as files)"""
-    output_dir = Path(output_path).parent
-    images_dir = output_dir / "images"
-    images_dir.mkdir(exist_ok=True)
+    images_dir = os.path.dirname(output_path)
+    os.makedirs(images_dir, exist_ok=True)
     
     image_counter = 0
     
@@ -47,7 +46,7 @@ def save_result(result: Dict[str, Any], output_path: str):
         if isinstance(obj, Image.Image):
             # Save image to file
             image_filename = f"round_{image_counter}.jpg"
-            image_path = images_dir / image_filename
+            image_path = images_dir + '/' + image_filename
             obj.save(image_path)
             image_counter += 1
             return f"images/{image_filename}"
@@ -61,7 +60,7 @@ def save_result(result: Dict[str, Any], output_path: str):
                         if part.get('type') == 'image' and isinstance(part.get('image'), Image.Image):
                             # Save image and convert to image_path format
                             image_filename = f"round_{image_counter}.jpg"
-                            image_path = images_dir / image_filename
+                            image_path = images_dir + '/' + image_filename
                             part['image'].save(image_path)
                             parts.append({
                                 "type": "image_path",

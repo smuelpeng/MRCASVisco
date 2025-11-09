@@ -3,18 +3,25 @@
 # Model settings
 models:
   # Target VLM for attack
+  # target_model:
+  #   type: "qwen-vl"  # Options: qwen-vl, internvl
+  #   model_path: "/data/lipeng/hf-cache/hub/models--Qwen--Qwen2.5-VL-7B-Instruct/snapshots/cc594898137f460bfe9f0759e9844b3ce807cfb5/"
+  #   device: "cuda"  # Options: cuda, cpu, auto
+  #   max_tokens: 2048
+  #   temperature: 0.0
+  #   trust_remote_code: true
+
+
   target_model:
-    type: "qwen-vl"  # Options: qwen-vl, internvl
-    model_path: "/mnt/pfs/share/pretrained_model/.cache/huggingface/hub/models--Qwen--Qwen2.5-VL-7B-Instruct/snapshots/68156fd997cdc9f710620466735af49862bb81f6/"
-    device: "cuda"  # Options: cuda, cpu, auto
-    max_tokens: 2048
+    model_name: "qwen-vl-max"          
+    api_key: sk-6b0fb947e0cd4abe9a6a7a8d6050f860                        
     temperature: 0.0
-    trust_remote_code: true
-  
+    max_tokens: 2048
+
   # Auxiliary VLM for description
   aux_vlm:
     type: "qwen-vl"
-    model_path: "/mnt/pfs/share/pretrained_model/.cache/huggingface/hub/models--Qwen--Qwen2.5-VL-7B-Instruct/snapshots/68156fd997cdc9f710620466735af49862bb81f6/"
+    model_path: "/data/lipeng/hf-cache/hub/models--Qwen--Qwen2.5-VL-7B-Instruct/snapshots/cc594898137f460bfe9f0759e9844b3ce807cfb5/"
     device: "cuda"  # Options: cuda, cpu, auto
     max_tokens: 1024
     temperature: 0.7
@@ -22,7 +29,7 @@ models:
   
   # SDXL for auxiliary image generation
   sdxl:
-    model_path: "/mnt/pfs/share/pretrained_model/.cache/huggingface/hub/models--stabilityai--stable-diffusion-xl-base-1.0/snapshots/462165984030d82259a11f4367a4eed129e94a7b/"
+    model_path: "/data/lipeng/hf-cache/hub/models--stabilityai--stable-diffusion-xl-base-1.0/snapshots/462165984030d82259a11f4367a4eed129e94a7b/"
     device: "cuda"  # Options: cuda, cpu, mps (for Mac)
     num_inference_steps: 30
     guidance_scale: 7.5
@@ -62,7 +69,7 @@ logging:
   level: "INFO"
   save_context: true
   save_responses: true
-  output_dir: "outputs/"
+  output_dir: "outputsqwenmax/"
 
 
 

@@ -20,6 +20,7 @@ class QwenVLModel(BaseVLModel):
         self, 
         model_path: str = "Qwen/Qwen2.5-VL-7B-Instruct",
         device: str = "cuda",
+        repo_type='model',  
         trust_remote_code: bool = True,
         **kwargs
     ):
